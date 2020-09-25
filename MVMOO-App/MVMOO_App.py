@@ -10,15 +10,12 @@ from PyQt5 import QtCore, QtGui, QtWidgets
 from QLed import QLed
 import matplotlib
 matplotlib.use("Qt5Agg")
-from matplotlib.backends.backend_qt5agg import (
-        FigureCanvas, NavigationToolbar2QT as NavigationToolbar)
+from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg, NavigationToolbar2QT as NavigationToolbar
 from matplotlib import cm
 from matplotlib.figure import Figure
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
-import os 
-import sys
-import time
+import os, sys, time, csv, io
 import qdarkstyle
 os.environ['QT_API'] = 'pyqt5'
 
@@ -27,11 +24,11 @@ import pandas as pd
 import numpy as np
 import scipy.io
 
-class ThreeDSurface_GraphWindow(FigureCanvas): #Class for 3D window
+class ThreeDSurface_GraphWindow(FigureCanvasQTAgg): #Class for 3D window
     def __init__(self):
         self.fig =plt.figure(figsize=(7,7))
         self.fig.set_facecolor('#19232D')
-        FigureCanvas.__init__(self, self.fig) #creating FigureCanvas
+        FigureCanvasQTAgg.__init__(self, self.fig) #creating FigureCanvas
         #self.axes = self.fig.gca(projection='3d')#generates 3D Axes object
 
     def DrawGraph(self, x, y, z=None, c=None, batch=1):#Fun for Graph plotting
@@ -87,7 +84,11 @@ class ThreeDSurface_GraphWindow(FigureCanvas): #Class for 3D window
             msg.setWindowTitle("Error")
             msg.exec_()
 
-class Ui_MainWindow(object):
+class Ui_MainWindow(QtWidgets.QMainWindow):
+
+    def __init__(self):
+        super(Ui_MainWindow, self).__init__()
+
     def setupUi(self, MainWindow):
         MainWindow.setObjectName("MainWindow")
         MainWindow.resize(809, 594)
@@ -189,8 +190,6 @@ class Ui_MainWindow(object):
         self.tResponse.setRowCount(1)
         self.tResponse.setColumnCount(2)
         self.tResponse.setObjectName("tResponse")
-        item = QtWidgets.QTableWidgetItem()
-        self.tResponse.setVerticalHeaderItem(0, item)
         self.verticalLayout.addWidget(self.tResponse)
         self.gridLayout_3.addLayout(self.verticalLayout, 1, 1, 1, 1)
         self.submit = QtWidgets.QPushButton(self.centralwidget)
@@ -238,6 +237,8 @@ class Ui_MainWindow(object):
         self.startButton.clicked.connect(self.start)
         self.changed_items = []
         self.boundsTable.itemChanged.connect(self.log_change)
+        self.tConditions.installEventFilter(self)
+        self.submit.clicked.connect(self.submit_click)
 
     def retranslateUi(self, MainWindow):
         _translate = QtCore.QCoreApplication.translate
@@ -259,10 +260,31 @@ class Ui_MainWindow(object):
         self.label.setText(_translate("MainWindow", "Watcher Active"))
         self.label_2.setText(_translate("MainWindow", "Conditions to Run"))
         self.label_3.setText(_translate("MainWindow", "Response"))
-        item = self.tResponse.verticalHeaderItem(0)
-        item.setText(_translate("MainWindow", "Response"))
         self.submit.setText(_translate("MainWindow", "Submit"))
         self.label_4.setText(_translate("MainWindow", "Submit Data"))
+
+    def eventFilter(self, source, event):
+        if (event.type() == QtCore.QEvent.KeyPress and
+            event.matches(QtGui.QKeySequence.Copy)):
+            self.copySelection()
+            return True
+        return super(Ui_MainWindow, self).eventFilter(source, event)
+
+    def copySelection(self):
+        selection = self.tConditions.selectedIndexes()
+        if selection:
+            rows = sorted(index.row() for index in selection)
+            columns = sorted(index.column() for index in selection)
+            rowcount = rows[-1] - rows[0] + 1
+            colcount = columns[-1] - columns[0] + 1
+            table = [[''] * colcount for _ in range(rowcount)]
+            for index in selection:
+                row = index.row() - rows[0]
+                column = index.column() - columns[0]
+                table[row][column] = index.data()
+            stream = io.StringIO()
+            csv.writer(stream).writerows(table)
+            QtWidgets.qApp.clipboard().setText(stream.getvalue())
 
     def log_change(self, item):
         try:
@@ -332,13 +354,17 @@ class Ui_MainWindow(object):
             msg.exec_()
 
     def getnextconditions(self, X, Y):
+        if self.mode == 0:
+            sign = 1
+        else:
+            sign = -1
         if int(self.nBatch.value()) < 2:
-            xnext, _ = self.optimiser.multinextcondition(X, Y)
+            xnext, _ = self.optimiser.multinextcondition(X, sign*Y)
             return xnext
         xnext = []
         Xtemp = X[:]
-        Ytemp = Y[:]
-        for i in range(int(self.nBatch.value())):
+        Ytemp = sign*Y[:]
+        for _ in range(int(self.nBatch.value())):
             xmax, _ = self.optimiser.multinextcondition(Xtemp, Ytemp)
             xnext.append(xmax)
             Ynew = []
@@ -351,7 +377,7 @@ class Ui_MainWindow(object):
         return np.array(xnext).reshape(-1,np.shape(X)[1])
 
     def startErrorCheck(self):
-        if not os.path.isdir(self.dataDirectory.text()) or not os.path.isdir(self.resultsDirectory.text()):
+        if (not os.path.isdir(self.dataDirectory.text()) or not os.path.isdir(self.resultsDirectory.text())) and self.Mode_2.currentText() == 'Online':
             msg = QtWidgets.QMessageBox()
             msg.setIcon(QtWidgets.QMessageBox.Critical)
             msg.setText("Directory Error")
@@ -414,6 +440,34 @@ class Ui_MainWindow(object):
         else:
             print("file has been delete")
 
+    def addTablevalues(self, values):
+        self.tConditions.setRowCount(np.shape(values)[0])
+        self.tConditions.setColumnCount(np.shape(values)[1])
+        for i in range(np.shape(values)[0]):
+            for j in range(np.shape(values)[1]):
+                self.tConditions.setItem(i,j,QtWidgets.QTableWidgetItem(str(values[i,j])))
+
+    def adjustResponse(self, rows):
+        self.tResponse.setRowCount(rows)
+        for i in range(rows):
+            for j in range(self.nObj.value()):
+                self.tResponse.setItem(i,j, QtWidgets.QTableWidgetItem())
+
+    def getMode(self):
+        msg = QtWidgets.QMessageBox()
+        msg.setIcon(QtWidgets.QMessageBox.Question)
+        msg.setText("Optimisation Mode")
+        msg.setInformativeText('Is this a minimisation or maximisation problem?')
+        msg.setWindowTitle("Mode Select")
+        msg.addButton(QtWidgets.QPushButton('Minimisation'), QtWidgets.QMessageBox.YesRole)
+        msg.addButton(QtWidgets.QPushButton('Maximisation'), QtWidgets.QMessageBox.NoRole)
+        result = msg.exec_()
+
+        if result == 0:
+            return 'min'
+        else:
+            return 'max'
+    
     def start(self):
         # Test file system watcher
         if self.startErrorCheck():
@@ -427,8 +481,50 @@ class Ui_MainWindow(object):
                 self.optimiser = MVMOO(input_dim=int(self.nDim.value()),num_qual=int(self.nQual.value()),num_obj=int(self.nObj.value()),bounds=bounds)
                 self.LED.value = True
                 self.disableInputs()
+            else: # Offline mode
+                bounds = self.getTableValues()
+                bounds[-self.nQual.value():,:] = bounds[-self.nQual.value():,:].astype(np.int)
+                self.optimiser = MVMOO(input_dim=int(self.nDim.value()),num_qual=int(self.nQual.value()),num_obj=int(self.nObj.value()),bounds=bounds)
+                initial = self.optimiser.sample_design(samples=5, design='lhc')
+                self.addTablevalues(initial)
+                self.adjustResponse(np.shape(initial)[0])
+                self.LED.value = True
+                self.disableInputs()
+                self.iteration = 0
+            self.mode = self.getMode()
 
+        # Add an option to continue from a previous run
 
+        
+
+    def submit_click(self):
+        # Firstly check response size matches conditions
+        conditions = np.zeros((self.tConditions.rowCount(),self.tConditions.columnCount()))
+        for i in range(self.tConditions.rowCount()):
+            for j in range(self.tConditions.columnCount()):
+                conditions[i,j] = float(self.tConditions.item(i,j).text())
+        
+        response = np.zeros((self.tResponse.rowCount(),self.nObj.value()))
+        for i in range(self.tResponse.rowCount()):
+            for j in range(self.nObj.value()):
+                response[i,j] = float(self.tResponse.item(i,j).text())
+                
+        if self.iteration == 0:
+            self.X = conditions
+            self.Y = response
+        else:
+            self.X = np.concatenate((self.X,conditions))
+            self.Y = np.concatenate((self.Y, response))
+
+        next_condition = self.getnextconditions(self.X, self.Y)
+        
+        self.addTablevalues(next_condition)
+        self.adjustResponse(np.shape(next_condition)[0]) 
+
+        self.plotting(self.Y)
+        self.iteration += 1
+
+        
 
 if __name__ == "__main__":
     app = QtWidgets.QApplication(sys.argv)
