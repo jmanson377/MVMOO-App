@@ -122,7 +122,13 @@
      <layout class="QGridLayout" name="ledLayout"/>
     </item>
     <item row="0" column="1" rowspan="2">
-     <widget class="QTableWidget" name="tableWidget">
+     <widget class="QTableWidget" name="boundsTable">
+      <property name="sizePolicy">
+       <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
+        <horstretch>0</horstretch>
+        <verstretch>0</verstretch>
+       </sizepolicy>
+      </property>
       <property name="sizeAdjustPolicy">
        <enum>QAbstractScrollArea::AdjustToContents</enum>
       </property>
@@ -146,7 +152,7 @@
      </widget>
     </item>
     <item row="0" column="3">
-     <widget class="QPushButton" name="pushButton">
+     <widget class="QPushButton" name="startButton">
       <property name="text">
        <string>Start</string>
       </property>
@@ -155,7 +161,7 @@
     <item row="1" column="2">
      <widget class="QLabel" name="label">
       <property name="text">
-       <string>Watcher Active</string>
+       <string>Active</string>
       </property>
      </widget>
     </item>
@@ -183,7 +189,7 @@
            <bool>false</bool>
           </property>
           <property name="sizePolicy">
-           <sizepolicy hsizetype="Expanding" vsizetype="Preferred">
+           <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
             <horstretch>0</horstretch>
             <verstretch>0</verstretch>
            </sizepolicy>
@@ -192,16 +198,11 @@
            <enum>QAbstractScrollArea::AdjustToContents</enum>
           </property>
           <property name="rowCount">
-           <number>1</number>
+           <number>0</number>
           </property>
           <property name="columnCount">
            <number>2</number>
           </property>
-          <row>
-           <property name="text">
-            <string>Response</string>
-           </property>
-          </row>
           <column/>
           <column/>
          </widget>
@@ -209,7 +210,7 @@
        </layout>
       </item>
       <item row="2" column="1">
-       <widget class="QPushButton" name="pushButton_2">
+       <widget class="QPushButton" name="submitButton">
         <property name="enabled">
          <bool>false</bool>
         </property>
@@ -229,6 +230,12 @@
        <widget class="QTableWidget" name="tConditions">
         <property name="enabled">
          <bool>false</bool>
+        </property>
+        <property name="sizePolicy">
+         <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
+          <horstretch>0</horstretch>
+          <verstretch>0</verstretch>
+         </sizepolicy>
         </property>
         <property name="sizeAdjustPolicy">
          <enum>QAbstractScrollArea::AdjustToContents</enum>
@@ -269,8 +276,32 @@
      <height>25</height>
     </rect>
    </property>
+   <widget class="QMenu" name="menuFile">
+    <property name="title">
+     <string>File</string>
+    </property>
+    <addaction name="actionSave"/>
+    <addaction name="actionLoad"/>
+    <addaction name="actionExit"/>
+   </widget>
+   <addaction name="menuFile"/>
   </widget>
   <widget class="QStatusBar" name="statusbar"/>
+  <action name="actionSave">
+   <property name="text">
+    <string>Save</string>
+   </property>
+  </action>
+  <action name="actionLoad">
+   <property name="text">
+    <string>Load</string>
+   </property>
+  </action>
+  <action name="actionExit">
+   <property name="text">
+    <string>Exit</string>
+   </property>
+  </action>
  </widget>
  <resources/>
  <connections/>

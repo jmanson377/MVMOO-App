@@ -23,6 +23,7 @@ from MVMOO import MVMOO
 import pandas as pd
 import numpy as np
 import scipy.io
+import pickle
 
 class ThreeDSurface_GraphWindow(FigureCanvasQTAgg): #Class for 3D window
     def __init__(self):
@@ -87,6 +88,9 @@ class ThreeDSurface_GraphWindow(FigureCanvasQTAgg): #Class for 3D window
 class Ui_MainWindow(QtWidgets.QMainWindow):
 
     def __init__(self):
+        self.X = []
+        self.Y = []
+        self.bounds = []
         super(Ui_MainWindow, self).__init__()
 
     def setupUi(self, MainWindow):
@@ -154,10 +158,9 @@ class Ui_MainWindow(QtWidgets.QMainWindow):
         self.ledLayout.addWidget(self.LED)
         self.gridLayout_2.addLayout(self.ledLayout, 1, 3, 1, 1)
         self.boundsTable = QtWidgets.QTableWidget(self.centralwidget)
-        self.boundsTable.setSizeAdjustPolicy(QtWidgets.QAbstractScrollArea.AdjustToContents)
         self.boundsTable.setRowCount(1)
         self.boundsTable.setColumnCount(2)
-        self.boundsTable.setObjectName("tableWidget")
+        self.boundsTable.setObjectName("boundsTable")
         item = QtWidgets.QTableWidgetItem()
         self.boundsTable.setHorizontalHeaderItem(0, item)
         item = QtWidgets.QTableWidgetItem()
@@ -181,27 +184,20 @@ class Ui_MainWindow(QtWidgets.QMainWindow):
         self.verticalLayout.setObjectName("verticalLayout")
         self.tResponse = QtWidgets.QTableWidget(self.centralwidget)
         self.tResponse.setEnabled(False)
-        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Preferred)
-        sizePolicy.setHorizontalStretch(0)
-        sizePolicy.setVerticalStretch(0)
-        sizePolicy.setHeightForWidth(self.tResponse.sizePolicy().hasHeightForWidth())
-        self.tResponse.setSizePolicy(sizePolicy)
-        self.tResponse.setSizeAdjustPolicy(QtWidgets.QAbstractScrollArea.AdjustToContents)
         self.tResponse.setRowCount(1)
         self.tResponse.setColumnCount(2)
         self.tResponse.setObjectName("tResponse")
         self.verticalLayout.addWidget(self.tResponse)
         self.gridLayout_3.addLayout(self.verticalLayout, 1, 1, 1, 1)
-        self.submit = QtWidgets.QPushButton(self.centralwidget)
-        self.submit.setEnabled(False)
-        self.submit.setObjectName("submit")
-        self.gridLayout_3.addWidget(self.submit, 2, 1, 1, 1)
+        self.submitButton = QtWidgets.QPushButton(self.centralwidget)
+        self.submitButton.setEnabled(False)
+        self.submitButton.setObjectName("submitButton")
+        self.gridLayout_3.addWidget(self.submitButton, 2, 1, 1, 1)
         self.label_4 = QtWidgets.QLabel(self.centralwidget)
         self.label_4.setObjectName("label_4")
         self.gridLayout_3.addWidget(self.label_4, 2, 0, 1, 1)
         self.tConditions = QtWidgets.QTableWidget(self.centralwidget)
         self.tConditions.setEnabled(False)
-        self.tConditions.setSizeAdjustPolicy(QtWidgets.QAbstractScrollArea.AdjustToContents)
         self.tConditions.setRowCount(1)
         self.tConditions.setColumnCount(2)
         self.tConditions.setObjectName("tConditions")
@@ -220,10 +216,22 @@ class Ui_MainWindow(QtWidgets.QMainWindow):
         self.menubar = QtWidgets.QMenuBar(MainWindow)
         self.menubar.setGeometry(QtCore.QRect(0, 0, 809, 25))
         self.menubar.setObjectName("menubar")
+        self.menuFile = QtWidgets.QMenu(self.menubar)
+        self.menuFile.setObjectName("menuFile")
         MainWindow.setMenuBar(self.menubar)
         self.statusbar = QtWidgets.QStatusBar(MainWindow)
         self.statusbar.setObjectName("statusbar")
         MainWindow.setStatusBar(self.statusbar)
+        self.actionSave = QtWidgets.QAction(MainWindow)
+        self.actionSave.setObjectName("actionSave")
+        self.actionLoad = QtWidgets.QAction(MainWindow)
+        self.actionLoad.setObjectName("actionLoad")
+        self.actionExit = QtWidgets.QAction(MainWindow)
+        self.actionExit.setObjectName("actionExit")
+        self.menuFile.addAction(self.actionSave)
+        self.menuFile.addAction(self.actionLoad)
+        self.menuFile.addAction(self.actionExit)
+        self.menubar.addAction(self.menuFile.menuAction())
 
         self.retranslateUi(MainWindow)
         QtCore.QMetaObject.connectSlotsByName(MainWindow)
@@ -238,7 +246,9 @@ class Ui_MainWindow(QtWidgets.QMainWindow):
         self.changed_items = []
         self.boundsTable.itemChanged.connect(self.log_change)
         self.tConditions.installEventFilter(self)
-        self.submit.clicked.connect(self.submit_click)
+        self.submitButton.clicked.connect(self.submit_click)
+        self.actionSave.triggered.connect(self.saveOpt)
+        self.actionExit.triggered.connect(self.exitApp)
 
     def retranslateUi(self, MainWindow):
         _translate = QtCore.QCoreApplication.translate
@@ -257,11 +267,15 @@ class Ui_MainWindow(QtWidgets.QMainWindow):
         item = self.boundsTable.horizontalHeaderItem(1)
         item.setText(_translate("MainWindow", "Upper"))
         self.startButton.setText(_translate("MainWindow", "Start"))
-        self.label.setText(_translate("MainWindow", "Watcher Active"))
+        self.label.setText(_translate("MainWindow", "Active"))
         self.label_2.setText(_translate("MainWindow", "Conditions to Run"))
         self.label_3.setText(_translate("MainWindow", "Response"))
-        self.submit.setText(_translate("MainWindow", "Submit"))
+        self.submitButton.setText(_translate("MainWindow", "Submit"))
         self.label_4.setText(_translate("MainWindow", "Submit Data"))
+        self.menuFile.setTitle(_translate("MainWindow", "File"))
+        self.actionSave.setText(_translate("MainWindow", "Save"))
+        self.actionLoad.setText(_translate("MainWindow", "Load"))
+        self.actionExit.setText(_translate("MainWindow", "Exit"))
 
     def eventFilter(self, source, event):
         if (event.type() == QtCore.QEvent.KeyPress and
@@ -306,7 +320,7 @@ class Ui_MainWindow(QtWidgets.QMainWindow):
             self.resultsDirectory.setEnabled(True)
             self.tConditions.setEnabled(False)
             self.tResponse.setEnabled(False)
-            self.submit.setEnabled(False)
+            self.submitButton.setEnabled(False)
         else:
             self.dataDir.setEnabled(False)
             self.dataDirectory.setEnabled(False)
@@ -314,11 +328,15 @@ class Ui_MainWindow(QtWidgets.QMainWindow):
             self.resultsDirectory.setEnabled(False)
             self.tConditions.setEnabled(True)
             self.tResponse.setEnabled(True)
-            self.submit.setEnabled(True)
+            self.submitButton.setEnabled(True)
 
     def adjustTable(self):
         self.boundsTable.setRowCount(self.nDim.value())
         self.tConditions.setColumnCount(self.nDim.value())
+        for i in range(self.nDim.value()):
+            for j in range(2):
+                self.boundsTable.setItem(i,j,QtWidgets.QTableWidgetItem())
+        
 
     def adjustObj(self):
         self.tResponse.setColumnCount(self.nObj.value())
@@ -328,9 +346,11 @@ class Ui_MainWindow(QtWidgets.QMainWindow):
 
     def getTableValues(self):
         values = np.zeros((2,self.nDim.value()))
-        for item in self.changed_items:
-            values[item.column(), item.row()] = float(item.text())
-        return values          
+        for i in range(self.boundsTable.rowCount()):
+            for j in range(self.boundsTable.columnCount()):
+                values[i,j] = float(self.boundsTable.item(i,j).text())
+
+        return values
 
     def getDir(self):
         path = QtWidgets.QFileDialog.getExistingDirectory(None, "Select Folder")
@@ -354,6 +374,7 @@ class Ui_MainWindow(QtWidgets.QMainWindow):
             msg.exec_()
 
     def getnextconditions(self, X, Y):
+        self.iteration += 1
         if self.mode == 0:
             sign = 1
         else:
@@ -467,24 +488,80 @@ class Ui_MainWindow(QtWidgets.QMainWindow):
             return 'min'
         else:
             return 'max'
+
+    def loadOpt(self):
+        path = QtWidgets.QFileDialog.getOpenFileName(self, "Open File", 'c://', "Pickle files (*.pickle)")
+
+        with open(path,'rb') as f:
+            optData = pickle.load(f)
+            f.close()
+        
+        self.X = optData['X']
+        self.Y = optData['Y']
+        self.nDim.setValue(optData['nDim'])
+        self.nObj.setValue(optData['nObj'])
+        self.nQual.setValue(optData['nQual'])
+        self.bounds = optData['bounds']
+        self.Mode_2.setCurrentText(optData['Mode'])
+        self.dataDirectory.setText(optData['dataDir'])
+        self.resultsDirectory.setText(optData['resDir'])
+
+    def saveOpt(self):
+        if self.bounds == []:
+            self.bounds = self.getTableValues()
+            self.bounds[-self.nQual.value():,:] = self.bounds[-self.nQual.value():,:].astype(np.int)
+
+        optData = {
+            'X': self.X,
+            'Y': self.Y,
+            'nDim': int(self.nDim.value()),
+            'nObj': int(self.nObj.value()),
+            'nQual': int(self.nQual.value()),
+            'bounds': self.bounds,
+            'Mode': self.Mode_2.currentText(),
+            'dataDir': self.dataDirectory.text(),
+            'resDir': self.resultsDirectory.text(),
+        }
+        path = QtWidgets.QFileDialog.getSaveFileName(self, "Save File", 'c://', "Pickle files (*.pickle)")
+
+        with open(path, 'wb') as f:
+            pickle.dump(optData,f)
+            f.close()
+
+    def exitApp(self):
+        msg = QtWidgets.QMessageBox()
+        msg.setIcon(QtWidgets.QMessageBox.Question)
+        msg.setText("Continue?")
+        msg.setInformativeText('Are you sure you want to exit the optimisation?')
+        msg.setWindowTitle("Continue?")
+        msg.addButton(QtWidgets.QMessageBox.Yes)
+        msg.addButton(QtWidgets.QMessageBox.No)
+
+        result = msg.exec_()
+
+        if result == QtWidgets.QMessageBox.Yes:
+            sys.exit()
+        else:
+            return False
     
     def start(self):
         # Test file system watcher
         if self.startErrorCheck():
+            if self.bounds == []:
+                self.bounds = self.getTableValues()
+                self.bounds[-self.nQual.value():,:] = self.bounds[-self.nQual.value():,:].astype(np.int)
+            self.optimiser = MVMOO(input_dim=int(self.nDim.value()),num_qual=int(self.nQual.value()),num_obj=int(self.nObj.value()),bounds=self.bounds)
+
             if self.Mode_2.currentText == 'Online':
                 self.watcher = QtCore.QFileSystemWatcher()
                 path = self.dataDirectory.text()
                 self.watcher.addPath(path)
                 self.watcher.directoryChanged.connect(self.onChange)
                 # Complete
-                bounds = self.getTableValues()
-                self.optimiser = MVMOO(input_dim=int(self.nDim.value()),num_qual=int(self.nQual.value()),num_obj=int(self.nObj.value()),bounds=bounds)
                 self.LED.value = True
                 self.disableInputs()
+                self.iteration = 0
             else: # Offline mode
-                bounds = self.getTableValues()
-                bounds[-self.nQual.value():,:] = bounds[-self.nQual.value():,:].astype(np.int)
-                self.optimiser = MVMOO(input_dim=int(self.nDim.value()),num_qual=int(self.nQual.value()),num_obj=int(self.nObj.value()),bounds=bounds)
                 initial = self.optimiser.sample_design(samples=5, design='lhc')
                 self.addTablevalues(initial)
                 self.adjustResponse(np.shape(initial)[0])
@@ -522,7 +599,6 @@ class Ui_MainWindow(QtWidgets.QMainWindow):
         self.adjustResponse(np.shape(next_condition)[0]) 
 
         self.plotting(self.Y)
-        self.iteration += 1
 
         
 
