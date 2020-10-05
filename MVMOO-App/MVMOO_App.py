@@ -24,6 +24,7 @@ import pandas as pd
 import numpy as np
 import scipy.io
 import pickle
+import json
 
 class ThreeDSurface_GraphWindow(FigureCanvasQTAgg): #Class for 3D window
     def __init__(self):
@@ -88,9 +89,9 @@ class ThreeDSurface_GraphWindow(FigureCanvasQTAgg): #Class for 3D window
 class Ui_MainWindow(QtWidgets.QMainWindow):
 
     def __init__(self):
-        self.X = []
-        self.Y = []
-        self.bounds = []
+        self.X = np.array([])
+        self.Y = np.array([])
+        self.bounds = np.array([])
         super(Ui_MainWindow, self).__init__()
 
     def setupUi(self, MainWindow):
@@ -244,7 +245,7 @@ class Ui_MainWindow(QtWidgets.QMainWindow):
         self.Mode_2.currentTextChanged.connect(self.adjustMode)
         self.startButton.clicked.connect(self.start)
         self.changed_items = []
-        self.boundsTable.itemChanged.connect(self.log_change)
+        #self.boundsTable.itemChanged.connect(self.log_change)
         self.tConditions.installEventFilter(self)
         self.submitButton.clicked.connect(self.submit_click)
         self.actionSave.triggered.connect(self.saveOpt)
@@ -348,7 +349,7 @@ class Ui_MainWindow(QtWidgets.QMainWindow):
         values = np.zeros((2,self.nDim.value()))
         for i in range(self.boundsTable.rowCount()):
             for j in range(self.boundsTable.columnCount()):
-                values[i,j] = float(self.boundsTable.item(i,j).text())
+                values[j,i] = float(self.boundsTable.item(i,j).text())
 
         return values
 
@@ -406,7 +407,7 @@ class Ui_MainWindow(QtWidgets.QMainWindow):
             msg.setWindowTitle("Error")
             msg.exec_()
             return False
-        elif np.shape(self.getTableValues()) != (2,int(self.nDim.value())) or np.size(self.changed_items) < 2 * int(self.nDim.value()):
+        elif np.shape(self.getTableValues()) != (2,int(self.nDim.value())):
             msg = QtWidgets.QMessageBox()
             msg.setIcon(QtWidgets.QMessageBox.Critical)
             msg.setText("Bounds Error")
@@ -468,6 +469,13 @@ class Ui_MainWindow(QtWidgets.QMainWindow):
             for j in range(np.shape(values)[1]):
                 self.tConditions.setItem(i,j,QtWidgets.QTableWidgetItem(str(values[i,j])))
 
+    def addBoundvalues(self, values):
+        self.boundsTable.setRowCount(np.shape(values)[0])
+        self.boundsTable.setColumnCount(np.shape(values)[1])
+        for i in range(np.shape(values)[0]):
+            for j in range(np.shape(values)[1]):
+                self.boundsTable.setItem(i,j,QtWidgets.QTableWidgetItem(str(values[i,j])))
+
     def adjustResponse(self, rows):
         self.tResponse.setRowCount(rows)
         for i in range(rows):
@@ -492,7 +500,7 @@ class Ui_MainWindow(QtWidgets.QMainWindow):
     def loadOpt(self):
         path = QtWidgets.QFileDialog.getOpenFileName(self, "Open File", 'c://', "Pickle files (*.pickle)")
 
-        with open(path,'rb') as f:
+        with open(path[0],'rb') as f:
             optData = pickle.load(f)
             f.close()
         
@@ -505,9 +513,13 @@ class Ui_MainWindow(QtWidgets.QMainWindow):
         self.Mode_2.setCurrentText(optData['Mode'])
         self.dataDirectory.setText(optData['dataDir'])
         self.resultsDirectory.setText(optData['resDir'])
+        self.iteration = optData['iteration']
 
-    def saveOpt(self):
-        if self.bounds == []:
+        # add code to display loaded bounds in bounds table
+        self.addBoundvalues(self.bounds)
+
+    def saveOpt(self, fname=False):
+        if np.size(self.bounds) < 1:
             self.bounds = self.getTableValues()
             self.bounds[-self.nQual.value():,:] = self.bounds[-self.nQual.value():,:].astype(np.int)
 
@@ -519,14 +531,17 @@ class Ui_MainWindow(QtWidgets.QMainWindow):
             'nQual': int(self.nQual.value()),
             'bounds': self.bounds,
             'Mode': self.Mode_2.currentText(),
-            'dataDir': self.dataDirectory.text(),
-            'resDir': self.resultsDirectory.text(),
+            'dataDir': "" if self.dataDirectory is None else self.dataDirectory.text(),
+            'resDir': "" if self.resultsDirectory is None else self.resultsDirectory.text(),
+            'iteration': self.iteration,
         }
         path = QtWidgets.QFileDialog.getSaveFileName(self, "Save File", 'c://', "Pickle files (*.pickle)")
 
-        with open(path, 'wb') as f:
+        with open(path[0], 'wb') as f:
             pickle.dump(optData,f)
             f.close()
+        if fname:
+            return path[0], optData
 
     def exitApp(self):
         msg = QtWidgets.QMessageBox()
@@ -540,6 +555,28 @@ class Ui_MainWindow(QtWidgets.QMainWindow):
         result = msg.exec_()
 
         if result == QtWidgets.QMessageBox.Yes:
+            msg = QtWidgets.QMessageBox()
+            msg.setIcon(QtWidgets.QMessageBox.Question)
+            msg.setText("Save Data?")
+            msg.setInformativeText('Do you wish to save the optimisation data?')
+            msg.setWindowTitle("Continue?")
+            msg.addButton(QtWidgets.QMessageBox.Yes)
+            msg.addButton(QtWidgets.QMessageBox.No)
+
+            result = msg.exec_()
+            path = None
+            optData = None
+            if result == QtWidgets.QMessageBox.Yes:
+                path, optData = self.saveOpt(fname=True)
+            
+            if path is not None:
+                path = path[:-7] + ".json"
+                with open(path, 'w') as f:
+                    optData['X'] = optData['X'].tolist()
+                    optData['Y'] = optData['Y'].tolist()
+                    optData['bounds'] = optData['bounds'].tolist() 
+                    json.dump(optData, f)
+                    f.close()
             sys.exit()
         else:
             return False
@@ -570,9 +607,7 @@ class Ui_MainWindow(QtWidgets.QMainWindow):
                 self.iteration = 0
             self.mode = self.getMode()
 
-        # Add an option to continue from a previous run
-
-        
+        # Add an option to continue from a previous run        
 
     def submit_click(self):
         # Firstly check response size matches conditions
@@ -598,9 +633,7 @@ class Ui_MainWindow(QtWidgets.QMainWindow):
         self.addTablevalues(next_condition)
         self.adjustResponse(np.shape(next_condition)[0]) 
 
-        self.plotting(self.Y)
-
-        
+        self.plotting(self.Y) 
 
 if __name__ == "__main__":
     app = QtWidgets.QApplication(sys.argv)
