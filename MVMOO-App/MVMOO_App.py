@@ -247,6 +247,7 @@ class Ui_MainWindow(QtWidgets.QMainWindow):
         self.changed_items = []
         #self.boundsTable.itemChanged.connect(self.log_change)
         self.tConditions.installEventFilter(self)
+        self.tResponse.installEventFilter(self)
         self.submitButton.clicked.connect(self.submit_click)
         self.actionSave.triggered.connect(self.saveOpt)
         self.actionExit.triggered.connect(self.exitApp)
@@ -283,6 +284,10 @@ class Ui_MainWindow(QtWidgets.QMainWindow):
             event.matches(QtGui.QKeySequence.Copy)):
             self.copySelection()
             return True
+        if (event.type() == QtCore.QEvent.KeyPress and
+            event.matches(QtGui.QKeySequence.Paste)):
+            self.pasteSelection()
+            return True
         return super(Ui_MainWindow, self).eventFilter(source, event)
 
     def copySelection(self):
@@ -300,6 +305,28 @@ class Ui_MainWindow(QtWidgets.QMainWindow):
             stream = io.StringIO()
             csv.writer(stream).writerows(table)
             QtWidgets.qApp.clipboard().setText(stream.getvalue())
+
+    def pasteSelection(self):
+        selection = self.tResponse.selectedIndexes()
+        if selection:
+            model = self.tResponse()
+
+            buffer = QtWidgets.qApp.clipboard().text() 
+            rows = sorted(index.row() for index in selection)
+            columns = sorted(index.column() for index in selection)
+            reader = csv.reader(io.StringIO(buffer), delimiter='\t')
+            if len(rows) == 1 and len(columns) == 1:
+                for i, line in enumerate(reader):
+                    for j, cell in enumerate(line):
+                        model.setData(model.index(rows[0]+i,columns[0]+j), cell)
+            else:
+                arr = [ [ cell for cell in row ] for row in reader]
+                for index in selection:
+                    row = index.row() - rows[0]
+                    column = index.column() - columns[0]
+                    model.setData(model.index(index.row(), index.column()), arr[row][column])
+        return
+
 
     def log_change(self, item):
         try:
@@ -376,6 +403,7 @@ class Ui_MainWindow(QtWidgets.QMainWindow):
 
     def getnextconditions(self, X, Y):
         self.iteration += 1
+        self.saveOpt(log=True)
         if self.mode == 0:
             sign = 1
         else:
@@ -407,7 +435,7 @@ class Ui_MainWindow(QtWidgets.QMainWindow):
             msg.setWindowTitle("Error")
             msg.exec_()
             return False
-        elif np.shape(self.getTableValues()) != (2,int(self.nDim.value())):
+        elif (np.shape(self.getTableValues()) != (2,int(self.nDim.value()))):
             msg = QtWidgets.QMessageBox()
             msg.setIcon(QtWidgets.QMessageBox.Critical)
             msg.setText("Bounds Error")
@@ -455,6 +483,8 @@ class Ui_MainWindow(QtWidgets.QMainWindow):
             os.remove(fname)
             X = values['data'][:,:self.nDim.value()]
             Y = values['data'][:,-self.nObj.value():]
+            self.X = X
+            self.Y = Y
             x = self.getnextconditions(X,Y)
             values = {'values': x}
             scipy.io.savemat(self.resultsDirectory.text() + '/next.mat',values)
@@ -518,7 +548,7 @@ class Ui_MainWindow(QtWidgets.QMainWindow):
         # add code to display loaded bounds in bounds table
         self.addBoundvalues(self.bounds)
 
-    def saveOpt(self, fname=False):
+    def saveOpt(self, fname=False, log=False):
         if np.size(self.bounds) < 1:
             self.bounds = self.getTableValues()
             self.bounds[-self.nQual.value():,:] = self.bounds[-self.nQual.value():,:].astype(np.int)
@@ -535,7 +565,10 @@ class Ui_MainWindow(QtWidgets.QMainWindow):
             'resDir': "" if self.resultsDirectory is None else self.resultsDirectory.text(),
             'iteration': self.iteration,
         }
-        path = QtWidgets.QFileDialog.getSaveFileName(self, "Save File", 'c://', "Pickle files (*.pickle)")
+        if log:
+            path = os.getcwd() + "/temp.pickle"
+        else:
+            path = QtWidgets.QFileDialog.getSaveFileName(self, "Save File", 'c://', "Pickle files (*.pickle)")
 
         with open(path[0], 'wb') as f:
             pickle.dump(optData,f)
@@ -584,7 +617,7 @@ class Ui_MainWindow(QtWidgets.QMainWindow):
     def start(self):
         # Test file system watcher
         if self.startErrorCheck():
-            if self.bounds == []:
+            if self.bounds.size < 1:
                 self.bounds = self.getTableValues()
                 self.bounds[-self.nQual.value():,:] = self.bounds[-self.nQual.value():,:].astype(np.int)
             self.optimiser = MVMOO(input_dim=int(self.nDim.value()),num_qual=int(self.nQual.value()),num_obj=int(self.nObj.value()),bounds=self.bounds)
@@ -607,7 +640,7 @@ class Ui_MainWindow(QtWidgets.QMainWindow):
                 self.iteration = 0
             self.mode = self.getMode()
 
-        # Add an option to continue from a previous run        
+        # Add an option to continue from a previous run
 
     def submit_click(self):
         # Firstly check response size matches conditions
