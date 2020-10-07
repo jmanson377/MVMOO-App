@@ -25,6 +25,7 @@ import numpy as np
 import scipy.io
 import pickle
 import json
+import warnings
 
 class ThreeDSurface_GraphWindow(FigureCanvasQTAgg): #Class for 3D window
     def __init__(self):
@@ -485,9 +486,12 @@ class Ui_MainWindow(QtWidgets.QMainWindow):
             Y = values['data'][:,-self.nObj.value():]
             self.X = X
             self.Y = Y
-            x = self.getnextconditions(X,Y)
-            values = {'values': x}
-            scipy.io.savemat(self.resultsDirectory.text() + '/next.mat',values)
+            try:
+                x = self.getnextconditions(X,Y)
+                values = {'values': x}
+                scipy.io.savemat(self.resultsDirectory.text() + '/next.mat',values)
+            except:
+                warnings.warn("Unable to generate next conditions, please submit conditions again")
             self.plotting(Y)
         else:
             print("file has been delete")
@@ -660,11 +664,13 @@ class Ui_MainWindow(QtWidgets.QMainWindow):
         else:
             self.X = np.concatenate((self.X,conditions))
             self.Y = np.concatenate((self.Y, response))
-
-        next_condition = self.getnextconditions(self.X, self.Y)
+        try:
+            next_condition = self.getnextconditions(self.X, self.Y)
         
-        self.addTablevalues(next_condition)
-        self.adjustResponse(np.shape(next_condition)[0]) 
+            self.addTablevalues(next_condition)
+            self.adjustResponse(np.shape(next_condition)[0])
+        except:
+            warnings.warn("Unable to generate next conditions, please submit results again")
 
         self.plotting(self.Y) 
 
