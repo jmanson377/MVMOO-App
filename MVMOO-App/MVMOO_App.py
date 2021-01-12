@@ -93,6 +93,7 @@ class Ui_MainWindow(QtWidgets.QMainWindow):
         self.X = np.array([])
         self.Y = np.array([])
         self.bounds = np.array([])
+        self.iteration = 0
         super(Ui_MainWindow, self).__init__()
 
     def setupUi(self, MainWindow):
@@ -626,7 +627,7 @@ class Ui_MainWindow(QtWidgets.QMainWindow):
                 self.bounds[-self.nQual.value():,:] = self.bounds[-self.nQual.value():,:].astype(np.int)
             self.optimiser = MVMOO(input_dim=int(self.nDim.value()),num_qual=int(self.nQual.value()),num_obj=int(self.nObj.value()),bounds=self.bounds)
 
-            if self.Mode_2.currentText == 'Online':
+            if self.Mode_2.currentText() == 'Online':
                 self.watcher = QtCore.QFileSystemWatcher()
                 path = self.dataDirectory.text()
                 self.watcher.addPath(path)
@@ -634,14 +635,12 @@ class Ui_MainWindow(QtWidgets.QMainWindow):
                 # Complete
                 self.LED.value = True
                 self.disableInputs()
-                self.iteration = 0
             else: # Offline mode
                 initial = self.optimiser.sample_design(samples=5, design='lhc')
                 self.addTablevalues(initial)
                 self.adjustResponse(np.shape(initial)[0])
                 self.LED.value = True
                 self.disableInputs()
-                self.iteration = 0
             self.mode = self.getMode()
 
         # Add an option to continue from a previous run
