@@ -406,7 +406,7 @@ class Ui_MainWindow(QtWidgets.QMainWindow):
     def getnextconditions(self, X, Y):
         self.iteration += 1
         self.saveOpt(log=True)
-        if self.mode == 0:
+        if self.mode == 'min':
             sign = 1
         else:
             sign = -1
